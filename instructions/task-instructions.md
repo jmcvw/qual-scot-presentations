@@ -2,8 +2,8 @@
 
 In January 2026, we published our __Progression Official Statistics in Development__ publication, (<https://www.sqa.org.uk/sqa/105163.12412.html>) along with an accompanying interactive app.
 
-You should review the publication’s __background information__, statistical summary, tables and __interactive app__.
-Your task is to identify __‘two stars and two wishes’__.
+You should review the publication's __background information__, statistical summary, tables and __interactive app__.
+Your task is to identify __'two stars and two wishes'__.
 i.e. two elements or aspects of the publication that you consider are __worthy of positive recognition__, and two where __further development__ could be made.
 
 You will have a maximum of __ten minutes__ to talk through the four items that you have identified, __giving reasons__ for your choices. 
@@ -12,7 +12,7 @@ You will have a maximum of __ten minutes__ to talk through the four items that y
 ##  Task 2:
 
 Every year we publish summary tables of statistics for the Skills for Work, Awards, National Progression Awards and National Certificates qualifications.
-These are in cluded in tables in many of the ‘Attainment Statistics 2025’ Excel workbook s that are downloadable from here: <https://www.sqa.org.uk/sqa/48269.8311.html>.
+These are included in tables in many of the 'Attainment Statistics 2025' Excel workbooks that are downloadable from here: <https://www.sqa.org.uk/sqa/48269.8311.html>.
 
 Your task is to provide a __high level analysis__ of at least one of these __qualification types__ using the available data .
 

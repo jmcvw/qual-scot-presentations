@@ -1,0 +1,60 @@
+---
+title: Get instruction text form Word doc
+execute:
+  eval: false
+---
+
+> Do not run this script again as it will overwrite the original instructions document.
+> This is just a one-off to get the text from the Word document so I can read it locally 
+
+```{r}
+#| label: setup
+#| include: false
+LoadPackages(purrr, dplyr, tidyr, ggplot2, xml2)
+
+tidy_instruction_text <- function(task_text) {
+  paste(task_text, collapse = ' ') |>
+    sub('^[^T]*', '', x = _) |>
+    gsub('\\s+', ' ', x = _) |>
+    gsub('\\.\\s+', '.\n', x = _) |>
+    sub(': ', ':\n\n', x = _)
+}
+```
+
+
+```{r}
+# will need to adjust path depending on if I am using Vim or RStudio
+doc <- here::here('instructions/instructions/word/document.xml')
+doc <- 'instructions/word/document.xml'
+
+if (!file.exists(doc)) {
+  stop('Wrong path')
+}
+
+
+unzip(sqa_instuctions$docx, doc)
+```
+
+
+```{r}
+full_text <- read_xml(doc) |>
+  xml_find_all('//w:t') |>
+  xml_text(trim = T)
+
+task_idxs <- grep('Task \\d', full_text)
+task_1 <- full_text[task_idxs[1]:task_idxs[2] - 1]
+task_2 <- full_text[task_idxs[2]:length(full_text)]
+```
+
+
+```{r}
+task1_text <- tidy_instruction_text(task_1)
+
+cat('##', task1_text)
+```
+
+```{r}
+task2_text <- tidy_instruction_text(task_2)
+
+cat('## ', task2_text)
+```
