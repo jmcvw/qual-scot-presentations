@@ -1,0 +1,35 @@
+## Stars
+
+- Ranked plots
+    - Clean, clear
+    - information rich
+    - come with trade-offs
+        - which is fine, but could be improved by giving N, even just for most recent year?
+
+- Duel view of props
+    - Proportion of 1) N4 to N5 vs 2) N5 from N4
+    - 1) shows volume of feedforward
+    - 2) shows prop make up
+
+## Wishes
+
+- Demographic info
+    - Breaking down by gender, deprivation, race.... would be informative
+
+- Plot consistency
+    - Don't like those green/blue area charts
+    - information sparse
+    - Each one is basically only 2 data points
+    - same with stacked bars chars
+        - better than area plots
+        - but massive amount of space used
+        - lots of redundancy
+        - comparisons are difficult
+
+- No awards
+    - No thoughts on why ~half of students get no award in maths progressions
+    - M-A seems to do better
+        - higher agreement in grades pre/post progression
+        - fewer "no awards"
+    - All other routes are similar
+        - Highest prop of no awards is in A-M route

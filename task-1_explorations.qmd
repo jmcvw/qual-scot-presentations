@@ -1,0 +1,114 @@
+---
+title: 'title'
+date: '2026-05-02'
+format: 
+  html:
+    toc: true
+    embed-resources: true
+---
+
+
+```{r setup}
+#| include: false
+
+LoadPackages(purrr, dplyr, tidyr, ggplot2, rvest, patchwork)
+u <- 'https://www.sqa.org.uk/sqa/116432.html'
+
+data_exists <- file.exists('progression_stats.RDS')
+
+if (data_exists) {
+  progression_stats <- readRDS('progression_stats.RDS')
+} else {
+  source('progression_stats_tables.R')
+}
+
+
+get_table <- function(t) {
+  progression_stats$tables[[t]]
+}
+
+get_caption <- function(cap) {
+  progression_stats$captions[[cap]]
+}
+```
+
+```{r}
+f <- function(tab) {
+  tab |> 
+    mutate(across(contains('subject'), ~substring(., 1, 4))) |> 
+  mutate(directionality = paste(national_4_subject, national_5_subject, sep = '-'), .after = 2) |>
+  pivot_longer(-(1:3), names_to = 'year',
+               names_transform = ~as.integer(substring(gsub('\\D', '', .), 1, 4)),
+  ) |> 
+  mutate(value = as.numeric(sub('\\D', '', value))) |>
+  filter(value < 25)
+}
+
+g <- function(d, ax = 'left', cap) {
+  y_rng <- range(d$year)
+  d |> 
+    ggplot(aes(year, value, col = directionality)) +
+  geom_point(show.legend = F) +
+  geom_line(show.legend = F) +
+  geom_text(hjust = 'outward', aes(label = ifelse(year == min(year), substring(directionality, 1, 4), substring(directionality, 6, 8))),
+             show.legend = F) +
+  # geom_label(aes(label = ifelse(year == min(year), substring(directionality, 1, 4), substring(directionality, 6, 8))),
+  #            text.colour = 'grey20',
+  #            show.legend = F) +
+  scale_x_continuous(expand = c(1,1),breaks = y_rng) +
+  scale_y_continuous(limits = c(0, 25), position = ax, name = 'Proportion') +
+  labs(caption = cap) +
+  theme(plot.caption = element_text(size = 12))
+}
+
+p1 <- get_table('Table_16c') |> 
+  f() |>
+  g(cap = 'How many N4 went on to N5 in the\nfollowing year?')
+  
+p2 <- get_table('Table_16d') |> 
+  f() |> 
+  g(ax = 'right', cap = 'How many N5 came from N4 the\nprevious year?')
+
+(p1 | p2) +
+  plot_annotation(caption = 'Prop of N4 sudents that went onto N5 increased.\nProp of N5 students that came from N4 decreased.')
+
+```
+
+```{r}
+get_table('Table_16b') |>
+  rename(nat_4 = 1, nat_5 = 2) |> 
+  pivot_longer(3:7, names_to = 'grade') |> 
+  mutate(
+    prog = paste(substr(nat_4, 1, 1), substr(nat_5, 1, 1), sep = '-'),
+    grade_awarded = toupper(sub('.+_', '', grade)),
+         grade_awarded = replace_values(grade_awarded, from = 'AWARD', to = 'X'),
+         value = as.integer(sub('\\D', '', value))) |> 
+  ggplot(aes(grade_awarded, value)) +
+  geom_col() +
+  facet_wrap(vars(prog))
+```
+
+
+```{r}
+t16b <- get_table('Table_16b') |>
+  rename(nat_4 = 1, nat_5 = 2) |> 
+  pivot_longer(3:7, names_to = 'grade') |> 
+  mutate(
+    prog = paste(substr(nat_4, 1, 1), substr(nat_5, 1, 1), sep = '-'),
+    grade_awarded = toupper(sub('.+_', '', grade)),
+         grade_awarded = replace_values(grade_awarded, from = 'AWARD', to = 'X'),
+         value = as.integer(sub('\\D', '', value)))
+
+t16b |> 
+  ggplot(aes(grade_awarded, value, colour = prog)) +
+  geom_tile(aes(x = 'X', y = 42, width = .4, height = 24),
+            colour = '#ff8888', fill = '#ffbbbb11') +
+  geom_line(aes(group = prog), alpha = .4, linewidth = 1.2) +
+  geom_point(size = 4, shape = 'square') +
+  geom_text(aes(x = 5.4, label = prog), filter(t16b, grade_awarded == 'X')) +
+  scale_y_continuous(limits = c(0, 55), breaks = 0:5 * 10) +
+  labs(caption = 'Proportion of students ach') +
+    guides(colour = 'none') +
+  theme(panel.grid.major.y = element_line(colour = 'grey95'))
+
+```
