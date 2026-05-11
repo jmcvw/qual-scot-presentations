@@ -5,86 +5,107 @@ format: html
 
 ```{r}
 #| label: setup
-
 LoadPackages(rvest, httr2, readxl, tidyr, dplyr, stringr, purrr)
 ```
 
 ```{r}
+#| label: setup-rvest-session 
 u <- 'https://www.sqa.org.uk/sqa/'
 s <- rvest::session(u)
 
 att_stat_data_paths <- s |>
-    rvest::session_jump_to('105123.11712.html') |> 
-    rvest::html_elements('a') |> 
-    rvest::html_attr('href') |> 
-    grepv('xlsx$', x = _)
+  rvest::session_jump_to('105123.11712.html') |>
+  rvest::html_elements('a') |>
+  rvest::html_attr('href') |>
+  grepv('xlsx$', x = _)
 
 att_stat_2025 <- grepv('2025', att_stat_data_paths)
 sub('.*\\d\\d\\d\\d-', '', att_stat_2025)
-
-download.file(file.path(u, att_stat_2025[[28]]), 'nat_5.xlsx', mode = 'wb')
 ```
 
+```{r}
+#| labal: dl-data
+data_to_dl <- file.path(u, att_stat_2025[[33]])
+save_to <- 'npa.xlsx'
+
+if (!file.exists(save_to)) {
+  download.file(data_to_dl, save_to, mode = 'wb')
+}
+```
 
 ```{r}
+#| label: get-toc-from-first-sheet
 nat_5_toc <- read_xlsx(
-    'nat_5.xlsx',
-    sheet = 'Contents',
-    range = 'A2:A34'
-) |> 
-    rename(toc = 1)
+  'nat_5.xlsx',
+  sheet = 'Contents',
+  range = 'A2:A34'
+) |>
+  rename(toc = 1)
+```
 
-
-
+```{r}
+#| label: extract-all-ea-names
 ea_lookup <- nat_5_toc |>
-    separate_wider_regex(
-        cols = 'toc',
-        patterns = c('.+ ',
-                     table = '\\d+', ':.+ - ',
-                     desc = '.+')
-    ) |> 
-        mutate(table = paste0('EA', table), .after = 1)
+  separate_wider_regex(
+    cols = 'toc',
+    patterns = c('.+ ', table = '\\d+', ':.+ - ', desc = '.+')
+  ) |>
+  mutate(table = paste0('EA', table), .after = 1)
+```
 
-
-all_att_data <- map(ea_lookup$table, ~{
+```{r}
+#| label: combine-all-ea-data
+all_nat5_data <- map(
+  ea_lookup$table[1:2], # Just EA1 & EA2 for now
+  ~ {
     read_xlsx('nat_5.xlsx', sheet = .x, skip = 3) |>
-        select(Subject, contains('Percent')) |> 
-        mutate(
-            across(everything(), ~trimws(sub('%|,', '', .))),
-            across(-Subject, ~replace_values(., c('[c]', '[z]', '') ~ NA)),
-            across(-Subject, as.numeric)
-        )
-}) |> 
-    list_rbind() |> 
-    View()
+      select(Subject, contains('Percent')) |>
+      mutate(
+        across(everything(), ~ trimws(sub('%|,', '', .))),
+        across(-Subject, ~ replace_values(., c('[c]', '[z]', '') ~ NA)),
+        across(-Subject, as.numeric)
+      )
+  }
+) |>
+  list_rbind()
 
-object.size(all_att_data)
+# Still just EA1 & EA2 for now
+all_nat5_data
 
-z <- read_xlsx('nat_5.xlsx', sheet = 2, skip = 3)
-unique(z[[1]])
-
-
-summarize(z, across(contains('Count'), min))
-
+object.size(all_nat5_data)
 ```
 
 
 ```{r}
+#| label: subject-counts
+subjects_counts_2025 <- all_nat5_data |>
+  mutate(
+    across(contains('Percent'), ~ sub('%', '', .)),
+    across(-1, as.numeric)
+  ) |>
+  select(1, contains('Count')) |>
+  rowwise() |>
+  transmute(
+    Subject,
+    total_count = sum(c_across(2:36), na.rm = TRUE)
+  ) |>
+  arrange(desc(total_count))
 
-subjects_counts_2025 <- read_xlsx('nat_5.xlsx', sheet = 'EA1', skip = 3) |> 
-    mutate(
-        across(contains('Percent'), ~sub('%', '', .)),
-        across(-1, as.numeric)
-    ) |> 
-    select(1, contains('Count')) |> 
-    rowwise() |>   
-    transmute(
-        Subject,
-        total_count = sum(c_across(2:36), na.rm = TRUE)
-    ) |> 
-    arrange(desc(total_count))
+reframe(Subject, across(where(is.numeric), ~ min(., na.rm = T)))
+```
 
-reframe(Subject, across(where(is.numeric), ~min(., na.rm = T)))
+__Idea:__ choose a small number of subjects, and compare across EAs?
 
+***********************************************************************
 
+## Investigating NPAs
+
+```{r}
+#| label: investi
+npa <- read_xlsx(
+  'npa.xlsx',
+  sheet = 'Contents',
+  range = 'A2:A34'
+) |>
+  rename(toc = 1)
 ```
