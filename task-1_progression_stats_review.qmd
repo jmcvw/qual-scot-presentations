@@ -6,6 +6,7 @@ date: 2026-05-13
 format:
   revealjs:
     scrollable: true
+    embed-resources: true
     menu: false
     theme: simple
     progress: true
