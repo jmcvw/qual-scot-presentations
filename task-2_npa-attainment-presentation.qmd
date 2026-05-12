@@ -20,19 +20,6 @@ execute:
 canononical: false
 ---
 
-```{r}
-#| label: setup
-#| include: false
-library(readxl)
-library(tidyr)
-library(dplyr)
-library(stringr)
-library(purrr)
-library(ggplot2)
-library(gt)
-```
-
-
 ## Context
 
 > __This analysis asks:__  
@@ -273,10 +260,9 @@ Post-pandemic recovery
 :::{.callout-tip icon='false' collapse=true}
 ### To strengthen the equity argument
 
-- Normalise by school-age population per EA
+- Normalise by school-age population or chohort size
 - Link to centre-level data - are NPAs _offered_ but not completing, or not offered at all?
 - Extend to other SCQF levels - do patterns hold beyond Level 6?
-- Include suppressed `[c]` values in sensitivity analysis
 :::
 
 
