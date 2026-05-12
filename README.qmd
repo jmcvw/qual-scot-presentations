@@ -18,15 +18,48 @@ It includes two short presentations, each for each of the assigned tasks.
 
 ## Tasks
 
+
+
 ### Task 1
+
 Review of the publication and interactive app found at <https://www.sqa.org.uk/sqa/105163.12412.html>
 
 - Two "stars"
 - Two "wishes"
 - Brief justification for each
 
+#### Stars
+
+- Showing data as tables and figures
+    - (e.g. fig 13)
+- Giving actual values and proporions in tables
+- Subject ranking figs are info-rich and, thanks to palettes, easy to read
+- Figures are taken from interactive app, so they reflect what users see when they use the app
+- Some explanatory text around why no award is so common, esp for maths subject
+    - or possibly linking to, e.g., SIMD
+
+
+#### Wishes
+
+- Not clear to me who the intended auience is
+    - education policy makers? teachers? students? parents/general public?
+- Better table/fig legends
+    - could do more work for non-expert audience
+    - figure and table legends coould be more descriptive and informative, e.g. what the data show, how to interpret them, and what the key takeaways are
+- Current stats sumary is table first, with figures hidden in accorians
+    - putting plots first would make them more visible and encourage users to engage with them
+    - then tables could be used to provide more detailed information for those who want it, rather than being the default view
+- Many plots show props only
+    - adding values would help interpretation / comparison
+- some figs are information rich (e.g. subject rankings) and others are information poor (e.g. cohort proportions)
+    - cohort props take up a lot of space but actually show only 2 data points
+    - curved line between 2 data points is misleading and may suggest a trend that isn't there
+- Floating table of contents would help navigation
+- Having to scroll tables to see all columns
+
 
 ### Task 2
+
 Analysis based on:
 <https://www.sqa.org.uk/sqa/48269.8311.html>
 
