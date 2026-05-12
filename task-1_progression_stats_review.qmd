@@ -193,9 +193,7 @@ Giving both avoids misleading conclusions that either measure alone might sugges
 
 ## Wish 1: The Cohort Proportion Figures {background-color='#4A1942'}
 
-::: 
 
-:::
 
 
 
