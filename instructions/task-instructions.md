@@ -1,6 +1,6 @@
 ##  Task 1:
 
-In January 2026, we published our __Progression Official Statistics in Development__ publication, (<https://www.sqa.org.uk/sqa/105163.12412.html>) along with an accompanying interactive app.
+In January 2026, we published our __Progression Official Statistics in Development__ publication, (<https://www.sqa.org.uk/sqa/105163.html>) along with an accompanying interactive app.
 
 You should review the publication's __background information__, statistical summary, tables and __interactive app__.
 Your task is to identify __'two stars and two wishes'__.
