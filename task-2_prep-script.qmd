@@ -1,0 +1,454 @@
+---
+title: 'Data / fig prep'
+---
+
+```{r}
+#| label: setup
+#| message: false
+library(readxl)
+library(tidyr)
+library(dplyr)
+library(stringr)
+library(purrr)
+library(ggplot2)
+library(gt)
+```
+
+## EA-SIMD lookup table
+
+A lookup table for mapping EA lables, to EA names, to SIMD ranking.
+Requires reading SIMD table, and ToC from NPA data.
+And some minor clean-up to allow joining
+
+
+### SIMD
+
+See [@mccartney2023]
+
+SIMD overall education rank source:  
+<https://datamap-scotland.co.uk/simd-local-authorities/>
+
+```{r}
+simd_path <- 'data/ea-rankings.csv'
+
+simd_rankings <- read.csv(simd_path) |>
+  rename(deprv_rank = deprv.rnk) |>
+  mutate(
+    local_authority = replace_values(
+      local_authority,
+      'Na h-Eileanan Siar' ~ 'Comhairle Nan Eilean Siar',
+      'Glasgow City' ~ 'City Of Glasgow'
+    )
+  )
+```
+
+
+## NPA data
+
+```{r}
+npa_path <- 'data/npa.xlsx'
+all_sheet_names <- excel_sheets(npa_path)
+```
+
+```{r}
+#| label: create-ea-lookup-table
+#| eval: false
+
+ea_lookup <- read_xlsx(
+  npa_path,
+  sheet = 'Contents',
+  n_max = 32,
+  skip = 1
+) |>
+  rename(ea_name = 1) |>
+  mutate(ea_name = sub('.* - ', '', ea_name)) |>
+  mutate(
+    ea_name = sub('[Tt]he ', '', ea_name),
+    ea_name = sub(' +(and|&) +', ' And ', ea_name),
+    ea_name = sub(' +of +', ' Of ', ea_name),
+    ea_name = sub(' Council *', '', ea_name)
+  ) |>
+  mutate(ea_id = all_sheet_names[2:33], .before = 1)
+
+# write.csv(ea_lookup, 'data/ea-lookup.csv', row.names = FALSE)
+```
+
+```{r}
+ea_lookup_deprv <- left_join(
+  ea_lookup,
+  simd_rankings,
+  by = join_by(ea_name == local_authority)
+)
+```
+
+***********************************************************************
+
+## Investigating NPAs
+
+Steps:
+
+Filter NPA data for only SCQF level 6.
+
+Replace:
+
+- confidential data `[c]` with NA
+- Zero counts `[z]` with 0
+
+```{r}
+#| label: ea1-only
+#| eval: false
+npa_l6 <- read_xlsx(npa_path, sheet = 'EA1', skip = 3) |> #
+  janitor::clean_names() |>
+  filter(level == 'SCQF6') |>
+  select(-level)
+
+names(npa_l6)
+
+npa_l6 |>
+  pivot_longer(
+    contains('count'),
+    names_to = 'year',
+    values_to = 'award_count',
+    names_transform = ~ as.integer(gsub('\\D', '', .))
+  ) |>
+  mutate(
+    award_count = replace_values(award_count, '[c]' ~ NA, '[z]' ~ '0'),
+    award_count = as.integer(award_count),
+    subject = sub('\\s+-\\s+SCQF6 *', '', subject)
+  ) |>
+  mutate(ea_id = 'EA1', .before = 1)
+```
+
+## Chose focus EAs
+
+| EA ID | EA Name             | Deprivation ranking |
+|-------|---------------------|----------|
+| EA1   | Aberdeen City       | 16       |
+| EA2   | Aberdeenshire       | 30       |
+| EA5   | City Of Glasgow     |  2       |
+| EA29  | City Of Edinburgh   | 19       |
+| EA11  | East Dunbartonshire | 24       |
+| EA31  | West Dunbartonshire |  1       |
+
+Compare Aberdeen City with Aberdeenshire (mid vs high SIMD)
+Compare Glasgow City with Edinburgh (low vs mid SIMD)
+Compare East vs West Dunbartonshire (high vs low SIMD)
+
+NB: low rankings are most deprived.
+
+```{r}
+#| label: final-lookup-table
+chosen_eas <- filter(
+  ea_lookup_deprv,
+  deprv_rank %in% c(1, 2, 16, 19, 24, 30)
+) |>
+  mutate(
+    ea_rank = paste0(
+      c(
+        'Aberdeen City',
+        'Aberdeenshire',
+        'Glasgow',
+        'E Dunbarton',
+        'Edinburgh',
+        'W Dunbarton'
+      ),
+      ' (',
+      deprv_rank,
+      ')'
+    ),
+    ea_rank = factor(ea_rank, ea_rank[order(chosen_eas$ea_name)])
+  ) |>
+  mutate(
+    facet_var = case_when(
+      grepl('Aber', ea_name) ~ 'Aberdeen',
+      grepl('City', ea_name) ~ 'Ed-Gla',
+      grepl('Dunb', ea_name) ~ 'Dunbarton'
+    )
+  )
+
+sort(chosen_eas$ea_name)
+
+chosen_eas$ea_rank[order(unique(chosen_eas$ea_name))]
+chosen_eas$ea_rank |> levels()
+```
+
+### Make final analysis data
+
+Pull data form all tables.
+
+```{r}
+#| label: data-prep-function
+
+process_npa_data <- function(data_path, sheet) {
+  read_xlsx(data_path, sheet = sheet, skip = 3) |>
+    janitor::clean_names() |>
+    filter(level == 'SCQF6') |>
+    filter_out(if_all(contains('count'), ~ is.na(.) | . == 0)) |>
+    select(-level) |>
+    mutate(subject = sub(' - .*', '', subject)) |>
+    pivot_longer(
+      contains('count'),
+      names_to = 'year',
+      values_to = 'award_count',
+      names_transform = ~ as.integer(gsub('\\D', '', .))
+    ) |>
+
+    mutate(
+      award_count = replace_values(award_count, '[c]' ~ NA, '[z]' ~ '0'),
+      award_count = as.integer(award_count),
+      subject = sub('\\s+-\\s+SCQF6 *', '', subject)
+    ) |>
+    mutate(ea_id = sheet, .before = 1)
+}
+```
+
+```{r}
+#| label: prep-data
+all_subj <- map(chosen_eas$ea_id, \(sheet) {
+  process_npa_data(npa_path, sheet)
+}) |>
+  list_rbind()
+```
+
+
+```{r}
+high_vol_awards <- all_subj |>
+  filter(subject != 'Total', year == max(year)) |>
+  summarize(total_n = sum(award_count, na.rm = T), .by = c(subject)) |>
+  arrange(desc(total_n)) |>
+  filter(total_n >= 100)
+```
+
+```{r}
+#| warning: false
+all_subj |>
+  filter(!is.na(award_count)) |>
+  inner_join(high_vol_awards, by = join_by(subject == subject)) |>
+  inner_join(chosen_eas, by = join_by(ea_id == ea_id)) |>
+
+  ggplot(aes(
+    year,
+    award_count,
+    colour = ea_rank,
+    group = paste0(ea_id, subject)
+  )) +
+  geom_point() +
+  geom_line() +
+  facet_wrap(vars(subject)) +
+  scale_color_brewer(type = 'qual', palette = 'Paired')
+```
+
+```{r}
+all_subj |>
+  filter(!is.na(award_count)) |>
+  inner_join(filter(high_vol_awards, total_n %in% c(480, 370)), , by = join_by(subject == subject)) |>
+  inner_join(chosen_eas, by = join_by(ea_id == ea_id)) |>
+  mutate(subject = case_when(
+    substr(subject, 1, 1) == 'B' ~ 'Business with IT',
+    substr(subject, 1, 1) == 'E' ~ 'Fitness Leadership',
+    .default = subject
+  )) |> 
+  ggplot(aes(
+    year,
+    award_count,
+    colour = ea_rank,
+    group = paste0(ea_id, subject)
+  )) +
+  geom_point(size = 3) +
+  geom_line(linewidth = 1.2) +
+  facet_wrap(vars(subject)) +
+  scale_color_brewer(type = 'qual', palette = 'Paired') +
+  labs(x = '', y = 'Award count', colour = '') +
+  theme(text = element_text(size = 14)) +
+  theme_jw_default()
+
+# ggsave('figs/fig-award-counts.png')
+```
+
+
+Business with IT growth is being driven by Glasgow and E Dunb
+W Dunb is near bottom for everything
+
+
+```{r}
+subject_summary <- all_subj |>
+  inner_join(high_vol_awards) |>
+  filter(year == 2025) |>
+  summarize(
+    total_awards = sum(award_count, na.rm = TRUE),
+    mean_award = mean(award_count, na.rm = TRUE),
+    sd_award = sd(award_count, na.rm = TRUE),
+    iqr = IQR(award_count, na.rm = TRUE), #sd_award / mean_award,
+    .by = subject
+  ) |> 
+  inner_join(high_vol_awards) |>
+  select(subject, total_awards, iqr) |> 
+  arrange(desc(total_awards))
+
+```
+
+
+```{r}
+chosen <- c(
+  'Exercise and Fitness Leadership',
+  'Business with Information Technology',
+  'Criminology'
+)
+
+tab_1 <- subject_summary %>%
+  gt() %>%
+  tab_header(
+    title = 'NPA SCQF Level 6 Subject Selection',
+    subtitle = 'Total awards for 2025 across 6 selected Education Authorities'
+  ) %>%
+  cols_label(
+    subject = 'Subject',
+    total_awards = 'Total Awards',
+    iqr = 'IQR'
+  ) %>%
+  fmt_number(
+    columns = iqr,
+    decimals = 2
+  ) %>%
+  fmt_number(
+    columns = total_awards,
+    decimals = 0,
+    use_seps = TRUE
+  ) %>%
+  tab_style(
+    style = list(
+      cell_fill(color = '#2297E6'),
+      cell_text(color = 'white', weight = 'bold')
+    ),
+    locations = cells_body(
+      rows = subject %in% chosen
+    )
+  ) %>%
+  tab_style(
+    style = cell_text(weight = 'bold'),
+    locations = cells_column_labels()
+  ) %>%
+  tab_footnote(
+    footnote = 'Sports Development passed over in favour of topic breadth.',
+    locations = cells_body(columns = total_awards, rows = 3),
+    placement = 'right'
+  ) %>%
+  tab_options(
+    table.font.size = 16,
+    heading.title.font.size = 14,
+    heading.subtitle.font.size = 11
+  )
+
+
+# gtsave(tab_1, filename = 'figs/tab_subject-selection.html')
+```
+
+
+```{r}
+all_subj |>
+  filter(year == 2025) |> 
+  inner_join(high_vol_awards) |>
+  summarize(
+    total_awards = sum(award_count, na.rm = TRUE),
+    iqr = IQR(award_count, na.rm = TRUE),
+    .by = subject
+  ) |>
+  mutate(rank_iqr = rank(iqr)) |> 
+  arrange(desc(rank_iqr)) |> 
+  ggplot(aes(iqr, reorder(subject, iqr), fill = rank_iqr %in% c(5,7,9))) +
+  geom_col(show.legend = FALSE) +
+  geom_text(aes(1.3, subject, label = round(iqr, 3)), hjust = 0) +
+  scale_fill_manual(breaks = c(TRUE, FALSE), values = c(4, 8)) +
+  labs(title = 'Within subject variantion', y = '')
+
+# ggsave(filename = 'figs/fig_subject-selection.png')
+```
+
+## Three chosen subjects- 
+
+- Business with IT
+- Criminology
+- Exercise & Fitness Leadership
+
+High volume (> 100 total awards in 2025)
+High between-EA variance (IQR > 1.0)
+
+Narrative
+
+- one growth/digital subject (Business with IT)
+- one social science (Criminology)
+- one health/active living subject (Exercise & Fitness Leadership)
+
+
+
+## Business with Information Technology
+
+Glasgow dominates at 180 in 2025, up from just 15 in 2019.
+East Dunbartonshire (125) and Aberdeen City (65) follow.
+Edinburgh is surprisingly low at 55 despite being a large city.
+West Dunbartonshire is near zero throughout - only 10 in 2025 with most years suppressed or zero.
+
+Strong deprivation story: most deprived EA barely participates in the fast-growing subject.
+
+
+## Criminology
+
+Completely absent from Edinburgh across all 7 years - every single row is zero.
+Surprising for capital.
+Aberdeenshire and Glasgow lead at 125, East Dunbartonshire at 75.
+West Dunbartonshire shows modest but consistent participation (30–40) from 2022 onwards, which is actually one of its stronger subjects relative to others.
+
+
+## Exercise and Fitness Leadership
+
+Edinburgh completely dominates at 185 in 2025 - nearly double anyone else.
+Glasgow (90) and Aberdeen City (80) are next closest.
+West Dunbartonshire is consistently very low (max 15), and had zero 2019–2021.
+
+
+## Narrative
+
+West Dunbartonshire (rank 1, most deprived) shows consistently low participation across almost every subject, while less deprived authorities grow strongly.
+But there are interesting nuances.
+Edinburgh's complete absence from Criminology and Glasgow's strength in Business IT complicate the simple narrative that deprivation = low participation.
+
+
+
+```{r}
+#| label: 'EA names are followed by brackets containing the EAs SIMD ranking. Note figure shows raw counts.'
+
+total_award_data <- all_subj |>
+  filter(subject == 'Total', !is.na(award_count)) |>
+  inner_join(chosen_eas, by = join_by(ea_id))
+
+ea_anno <- filter(total_award_data, subject == 'Total', year == 2025)
+
+
+total_award_data |>
+  ggplot(aes(year, award_count, colour = ea_rank)) +
+  geom_line(linewidth = 1.6) +
+  geom_point(size = 4) +
+  labs(colour = 'Education Authority') +
+  geom_text(
+    aes(2025, award_count, label = ea_rank),
+    filter(ea_anno, year == 2025),
+    size = 6,
+    hjust = 0,
+    nudge_x = .2
+  ) +
+  theme_jw_default() +
+  theme(
+    # text = element_text(size = 22),
+    #  legend.position = c(.2, 0.8),
+    #  legend.background = element_rect(fill = 'white', color = 'black')
+  ) +
+  labs(x = '', y = 'Award count') +
+  guides(colour = 'none') +
+  scale_x_continuous(limits = c(2019, 2027.5), breaks = 2019:2025) +
+  scale_colour_brewer(type = 'qual', palette = 'Paired')
+  # labs(title = 'Total award counts from 2019 to 2025')
+
+# ggsave('figs/fig_total-awards.png')
+```
+
+
