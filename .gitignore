@@ -1,0 +1,9 @@
+Thumbs.db
+.DS_Store
+*.docx
+
+*_files/
+*.html
+
+.Rproj.user
+.positai

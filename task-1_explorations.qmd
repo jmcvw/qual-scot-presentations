@@ -1,0 +1,101 @@
+---
+title: 'Progression exploration'
+date: '2026-05-02'
+format: 
+  html:
+    toc: true
+    embed-resources: true
+---
+
+
+```{r setup}
+#| include: false
+
+LoadPackages(purrr, dplyr, tidyr, ggplot2, rvest, patchwork)
+u <- 'https://www.sqa.org.uk/sqa/116432.html'
+
+data_exists <- file.exists('progression_stats.RDS')
+
+if (data_exists) {
+  progression_stats <- readRDS('progression_stats.RDS')
+} else {
+  source('get_progression_stats_tables.R')
+}
+
+
+get_table <- function(t) {
+  progression_stats$tables[[t]]
+}
+
+get_caption <- function(cap) {
+  progression_stats$captions[[cap]]
+}
+```
+
+```{r}
+prep_table <- function(tab) {
+  tab |> 
+    mutate(across(contains('subject'), ~substring(., 1, 4))) |> 
+    mutate(directionality = paste(national_4_subject, national_5_subject, sep = '-'), .after = 2) |>
+    pivot_longer(-(1:3), names_to = 'year',
+                 names_transform = ~as.integer(substring(gsub('\\D', '', .), 1, 4)),
+    ) |> 
+    mutate(value = as.numeric(sub('\\D', '', value))) |>
+    filter(value < 25)
+}
+
+do_plot <- function(d, ax = 'left', cap) {
+  y_rng <- range(d$year)
+  d |> 
+    ggplot(aes(year, value, col = directionality)) +
+    geom_line(linewidth = 1.6, show.legend = FALSE) +
+    geom_point(size = 3, show.legend = FALSE) +
+    ggrepel::geom_text_repel(hjust = 'inward',
+              aes(year,
+                label = ifelse(year == min(year),
+                                 substring(directionality, 1, 1),
+                                 substring(directionality, 6, 6))),
+              show.legend = FALSE,
+              size = 6
+              ) +
+    # geom_text(hjust = 'outward',
+    #           aes(year + ifelse(year == min(year), -.2, .2),
+    #             label = ifelse(year == min(year),
+    #                              substring(directionality, 1, 1),
+    #                              substring(directionality, 6, 6))),
+    #           show.legend = FALSE
+    #           ) +
+    # geom_label(aes(label = ifelse(year == min(year), substring(directionality, 1, 4), substring(directionality, 6, 8))),
+    #            text.colour = 'grey20',
+    #            show.legend = F) +
+    scale_x_continuous(expand = c(.25, .25), breaks = y_rng) +
+    scale_y_continuous(limits = c(0, 25), position = ax, name = 'Proportion') +
+    scale_color_brewer(type = 'qual', palette = 'Set1') +
+    labs(x = NULL, caption = cap) +
+    theme_minimal() +
+    theme(
+      text = element_text(size = 18),
+      plot.caption = element_text(size = 12, hjust = 0)
+    )
+}
+
+p1 <- get_table('Table_16c') |> 
+  prep_table() |>
+  do_plot(cap = 'Proportion of learners who went from\nNat-4 to Nat-5 maths')
+  # do_plot(cap = 'How many N4 went on to N5 in the\nfollowing year?')
+  
+p2 <- get_table('Table_16d') |> 
+  prep_table() |>
+  do_plot(ax = 'right', cap = 'Proportion of Nat-5 maths learners\nwho had taken Nat-4 maths') +
+  annotate('text', label = c('A = Applications of maths','M = Mathematics'), x = 2024, y = c(21, 23), size = 3.8, hjust = 0)
+  # do_plot(ax = 'right', cap = 'How many N5 came from N4 the\nprevious year?')
+
+(p1 | p2) +
+  plot_annotation(caption = 'Each coloured line represents one of four possible\nNat4-to-Nat5 route combinations.',
+                  tag_levels = 'a')
+
+ggsave('figs/fig_nat4-nat5-maths.png')
+```
+
+
+
