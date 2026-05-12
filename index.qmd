@@ -1,0 +1,7 @@
+---
+title: Qualifacations Scotland - Presesnetation tasks
+---
+
+[Task 1 - Two Stars; Two Wishes](task-1_progression_stats_review.html)
+
+[Task 2 - Attainment Stats Analysis](task-2_npa-attainment-presentation.html)
