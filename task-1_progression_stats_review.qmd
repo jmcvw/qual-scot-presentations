@@ -284,7 +284,8 @@ Plotting both measures together on shared axes reveals a pattern __invisible in 
 
 These move in opposite directions simultaneously
 
-This means N5 cohorts are __growing faster__ than the N4 progression pipeline - most N5 learners are arriving by routes the page does not capture
+- More N5 learners are arriving by routes the page does not capture?
+- __...Or are more than half are dropping out of the pipeline?__
 :::
 
 :::{.callout-tip icon='false'}
@@ -355,7 +356,7 @@ But the static page page itself still defaults to a structure that suits expert 
 ## Summary {.center}
 
 | | |
-|---|---|
+|---|----------------|
 |  __Star 1__ | Subject ranking figures - information-rich, readable, multi-dimensional |
 |  __Star 2__ | Dual progression perspective - methodologically thoughtful, avoids misleading conclusions |
 |  __Wish 1__ | Cohort proportion figures - curved lines mislead; a parallel approach reveals hidden patterns |
