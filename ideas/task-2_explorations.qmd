@@ -5,7 +5,7 @@ format: html
 
 ```{r}
 #| label: setup
-LoadPackages(rvest, httr2, readxl, tidyr, dplyr, stringr, purrr)
+LoadPackages(rvest, httr2, readxl, tidyr, dplyr, stringr, purrr, ggplot2)
 ```
 
 ```{r}
@@ -48,9 +48,16 @@ nat_5_toc <- read_xlsx(
 ea_lookup <- nat_5_toc |>
   separate_wider_regex(
     cols = 'toc',
-    patterns = c('.+ ', table = '\\d+', ':.+ - ', desc = '.+')
+    patterns = c('.+ ', table = '\\d+', ':.+ - ', ea_name = '.+')
   ) |>
-  mutate(table = paste0('EA', table), .after = 1)
+  mutate(
+    table = paste0('EA', table),
+    .after = 1,
+    ea_name = sub('[Tt]he ', '', ea_name),
+    ea_name = sub(' +(and|&) +', ' And ', ea_name),
+    ea_name = sub(' +of +', ' Of ', ea_name),
+    ea_name = sub(' Council *', '', ea_name)
+  )
 ```
 
 ```{r}
@@ -101,11 +108,301 @@ __Idea:__ choose a small number of subjects, and compare across EAs?
 ## Investigating NPAs
 
 ```{r}
-#| label: investi
-npa <- read_xlsx(
-  'npa.xlsx',
-  sheet = 'Contents',
-  range = 'A2:A34'
-) |>
-  rename(toc = 1)
+excel_sheets('npa.xlsx')
+```
+
+```{r}
+npa_toc <- read_xlsx('npa.xlsx', skip = 1)
+```
+
+Confirmed all npa_ea == ea_lookup$desc
+
+```{r}
+npa_l6 <- read_xlsx('npa.xlsx', sheet = 'EA1', skip = 3) |> #
+  janitor::clean_names() |>
+  filter(level == 'SCQF6')
+
+names(npa_l6)
+
+npa_l6 |>
+  pivot_longer(
+    -(1:2),
+    names_to = 'year',
+    values_to = 'award_count',
+    names_transform = ~ as.integer(gsub('\\D', '', .))
+  ) |>
+  mutate(
+    award_count = replace_values(award_count, '[c]' ~ NA, '[z]' ~ '0'),
+    award_count = as.integer(award_count),
+    subject = sub('\\s+-\\s+SCQF6 *', '', subject)
+  ) |>
+  mutate(ea = 'EA1', .before = 1)
+#   c('[c]', '[z]'), c(NA, 0)))
+```
+
+
+
+## SIMD
+
+See [@mccartney2023]
+
+
+```{r}
+excel_sheets('../../SIMD+2020v2+-+ranks.xlsx')
+read_xlsx('../../SIMD+2020v2+-+ranks.xlsx', sheet = 2)
+```
+
+
+```{r}
+# overall rank source: https://datamap-scotland.co.uk/simd-local-authorities/
+simd_ed_rank <- read.csv('../../data/ed-auth-ranking.csv') |>
+  mutate(
+    local_authority = replace_values(
+      local_authority,
+      'Na h-Eileanan Siar' ~ 'Comhairle Nan Eilean Siar',
+      'Glasgow City' ~ 'City Of Glasgow'
+    )
+  )
+
+ea_lookup_deprv <- left_join(
+  ea_lookup,
+  simd_ed_rank,
+  by = join_by(ea_name == local_authority)
+)
+```
+
+```{r}
+npa_l6 |>
+  pivot_longer(
+    -(1:2),
+    names_to = 'year',
+    values_to = 'award_count',
+    names_transform = ~ as.integer(gsub('\\D', '', .))
+  ) |>
+  mutate(
+    award_count = replace_values(award_count, '[c]' ~ NA, '[z]' ~ '0'),
+    award_count = as.integer(award_count),
+    subject = sub('\\s+-\\s+SCQF6 *', '', subject)
+  ) |>
+  mutate(ea = 'EA1', .before = 1)
+```
+
+```{r}
+npa_l6[-(1:2)] |>
+  mutate(across(everything(), as.numeric)) |>
+  filter_out(if_all(everything(), ~ is.na(.) | . == 0))
+
+# only 2 rows have no 0s or NAs
+npa_l6[-(1:2)] |>
+  mutate(across(everything(), as.numeric)) |>
+  filter_out(if_any(everything(), ~ is.na(.) | . == 0))
+
+# 0 rows are all na
+npa_l6[-(1:2)] |>
+  mutate(across(everything(), as.numeric)) |>
+  filter(if_a(everything(), is.na))
+
+# 28 rows are all 0
+npa_l6[-(1:2)] |>
+  mutate(across(everything(), as.numeric)) |>
+  filter(if_all(everything(), ~ . == 0))
+```
+
+```{r}
+
+```
+
+```{r}
+abbrev_ea <- inner_join(
+  simd_ed_rank,
+  abbrev_ea,
+  by = join_by(local_authority == ea_name)
+)
+```
+
+
+```{r}
+chosen_eas <- filter(ea_lookup_deprv, deprv_rank %in% c(1, 2, 16, 19, 24, 30))
+
+
+all_subj <- map(chosen_eas$table, \(s) {
+  read_xlsx('npa.xlsx', sheet = s, skip = 3) |>
+    janitor::clean_names() |>
+    filter(level == 'SCQF6') |>
+
+    filter_out(if_all(-(1:2), ~ is.na(.) | . == 0)) |>
+
+    select(-level) |>
+    mutate(subject = sub(' - .*', '', subject)) |>
+    pivot_longer(
+      contains('count'),
+      names_to = 'year',
+      values_to = 'award_count',
+      names_transform = ~ as.integer(gsub('\\D', '', .))
+    ) |>
+
+    mutate(
+      award_count = replace_values(award_count, '[c]' ~ NA, '[z]' ~ '0'),
+      award_count = as.integer(award_count),
+      subject = sub('\\s+-\\s+SCQF6 *', '', subject)
+    ) |>
+    mutate(ea = s, .before = 1)
+}) |>
+  list_rbind()
+
+
+abbrev_ea <- inner_join(ea_lookup, all_subj, by = join_by(table == ea)) |>
+  distinct(table, ea_name) |>
+  inner_join(simd_ed_rank, by = join_by(ea_name == local_authority)) |>
+  mutate(
+    ea_abbrev = paste0(
+      c(
+        'Aberdeen City',
+        'Aberdeenshire',
+        'Glasgow',
+        'E Dumbarton',
+        'Edinburgh',
+        'W Dumbarton'
+      ),
+      ' (',
+      deprv_rank,
+      ')'
+    )
+  ) |>
+  arrange(ea_name)
+```
+
+```{r}
+all_subj |>
+  filter_out(subject == 'Total') |>
+  filter(year == max(year)) |>
+  group_by(subject) |>
+  summarise(n = n())
+
+all_subj |>
+  filter_out(subject == 'Total') |>
+  filter(year == max(year)) |>
+  count(subject, sort = TRUE)
+
+all_subj |>
+  inner_join(all_occur, by = join_by(subject == subject)) |>
+  summarize(t = sum(award_count, na.rm = T), .by = c(subject, ea)) |>
+  pivot_wider(names_from = ea, values_from = t)
+
+all_occur <- all_subj |>
+  filter(subject != 'Total', year == max(year)) |>
+  summarize(total_n = sum(award_count, na.rm = T), .by = c(subject)) |>
+  arrange(desc(total_n)) |>
+  filter(total_n >= 100)
+```
+
+```{r}
+#| warning: false
+all_subj |>
+  filter(!is.na(award_count)) |>
+  inner_join(all_occur, by = join_by(subject == subject)) |>
+  inner_join(abbrev_ea, by = join_by(ea == table)) |>
+  mutate(
+    comp = recode_values(
+      ea,
+      c('EA1', 'EA2') ~ 'Aberdeen',
+      c('EA5', 'EA29') ~ 'Glw/Edb',
+      default = 'Dumbarton'
+    )
+  ) |>
+  ggplot(aes(
+    year,
+    award_count,
+    colour = ea_abbrev,
+    group = paste0(ea, subject)
+  )) +
+  geom_point() +
+  geom_line() +
+  facet_wrap(vars(subject))
+```
+
+Business with IT growth is being driven by Glasgow and E Dumb
+
+```{r}
+all_subj |>
+  filter(grepl('Legal', subject))
+```
+
+```{r}
+all_subj |>
+  inner_join(all_occur) |>
+  summarize(
+    cv = round(
+      sd(award_count, na.rm = TRUE) / mean(award_count, na.rm = TRUE),
+      3
+    ),
+    .by = subject
+  ) |>
+  arrange(desc(cv)) |>
+  simplermarkdown::md_table(as_character = TRUE) |>
+  writeClipboard()
+```
+
+## Three chosen subjects- 
+
+- Business with IT
+- Criminology
+- Exercise & Fitness Leadership
+
+High volume (>100 total awards in 2025)
+High between-EA variance (CV > 1.0)
+Narrative
+    - one growth/digital subject (Business with IT)
+    - one emerging social science (Criminology)
+    - one health/active living subject (Exercise & Fitness Leadership)
+
+
+
+## Business with Information Technology
+
+Glasgow dominates at 180 in 2025, up from just 15 in 2019.
+East Dunbartonshire (125) and Aberdeen City (65) follow.
+Edinburgh is surprisingly low at 55 despite being a large city.
+West Dunbartonshire is near zero throughout - only 10 in 2025 with most years suppressed or zero.
+
+Strong deprivation story: most deprived EA barely participates in the fast-growing subject.
+
+
+## Criminology
+
+Completely absent from Edinburgh across all 7 years - every single row is zero.
+Surprising for capital.
+Aberdeenshire and Glasgow lead at 125, East Dunbartonshire at 75.
+West Dunbartonshire shows modest but consistent participation (30–40) from 2022 onwards, which is actually one of its stronger subjects relative to others.
+
+
+## Exercise and Fitness Leadership
+
+Edinburgh completely dominates at 185 in 2025 - nearly double anyone else.
+Glasgow (90) and Aberdeen City (80) are next closest.
+West Dunbartonshire is consistently very low (max 15), and had zero 2019–2021.
+
+
+## Clear story
+
+West Dunbartonshire (rank 1, most deprived) shows consistently low participation across almost every subject, while less deprived authorities grow strongly.
+But there are interesting nuances.
+Edinburgh's complete absence from Criminology and Glasgow's strength in Business IT complicate the simple narrative that deprivation = low participation.
+
+
+
+```{r}
+all_subj |>
+  filter(subject == 'Total') |>
+  inner_join(abbrev_ea, by = join_by(ea == table)) |>
+  #select(-subject) |>
+  #  pivot_wider(names_from = year, values_from = award_count) |>
+  ggplot(aes(year, award_count, colour = ea_abbrev)) +
+  geom_line() +
+  geom_point()
+```
+
+
+```{r}
+
 ```
